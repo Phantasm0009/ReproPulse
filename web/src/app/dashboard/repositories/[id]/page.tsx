@@ -22,11 +22,17 @@ import { FindingsList, SeverityBadge } from '@/components/findings';
 import { ScoreHistoryChart } from '@/components/charts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { formatDate } from '@/lib/utils';
 import { RelativeTime } from '@/components/relative-time';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+
+// Simple date formatter that's consistent between server and client
+function formatChartDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`;
+}
 
 export default function RepositoryDetailPage() {
   const params = useParams();
@@ -121,14 +127,17 @@ export default function RepositoryDetailPage() {
     return analysis.score ?? analysis.overallScore ?? 0;
   };
 
-  // Prepare chart data
-  const scoreHistory = analysesData?.analyses
-    .slice()
-    .reverse()
-    .map((a) => ({
-      date: formatDate(a.createdAt).split(',')[0],
-      score: getScore(a),
-    })) || [];
+  // Prepare chart data - use useMemo to avoid recalculation
+  const scoreHistory = useMemo(() => {
+    if (!analysesData?.analyses) return [];
+    return analysesData.analyses
+      .slice()
+      .reverse()
+      .map((a) => ({
+        date: formatChartDate(a.createdAt),
+        score: getScore(a),
+      }));
+  }, [analysesData?.analyses]);
 
   return (
     <DashboardLayout user={user?.user} installationId={installationId || undefined}>
