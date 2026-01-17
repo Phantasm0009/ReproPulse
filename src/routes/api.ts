@@ -23,6 +23,30 @@ export async function apiRoutes(server: FastifyInstance) {
     return installations;
   });
 
+  // Get single installation by ID
+  server.get('/installations/:installationId', async (request, reply) => {
+    const { installationId } = request.params as { installationId: string };
+
+    const installation = await prisma.installation.findUnique({
+      where: { id: parseInt(installationId) },
+      include: {
+        repositories: {
+          where: { disabled: false },
+          select: { id: true, name: true, fullName: true, defaultBranch: true },
+        },
+        _count: {
+          select: { repositories: true, policies: true },
+        },
+      },
+    });
+
+    if (!installation) {
+      return reply.status(404).send({ error: 'Installation not found' });
+    }
+
+    return installation;
+  });
+
   // Get stats for an installation
   server.get('/installations/:installationId/stats', async (request, reply) => {
     const { installationId } = request.params as { installationId: string };
@@ -101,7 +125,7 @@ export async function apiRoutes(server: FastifyInstance) {
     const { repoId } = request.params as { repoId: string };
 
     const repository = await prisma.repository.findUnique({
-      where: { id: repoId },
+      where: { id: parseInt(repoId) },
       include: {
         analyses: {
           orderBy: { createdAt: 'desc' },
@@ -129,7 +153,7 @@ export async function apiRoutes(server: FastifyInstance) {
     const skip = (parseInt(page) - 1) * take;
 
     const analyses = await prisma.analysis.findMany({
-      where: { repositoryId: repoId },
+      where: { repositoryId: parseInt(repoId) },
       orderBy: { createdAt: 'desc' },
       take,
       skip,
@@ -141,7 +165,7 @@ export async function apiRoutes(server: FastifyInstance) {
     });
 
     const total = await prisma.analysis.count({
-      where: { repositoryId: repoId },
+      where: { repositoryId: parseInt(repoId) },
     });
 
     return { analyses, total };
@@ -158,7 +182,7 @@ export async function apiRoutes(server: FastifyInstance) {
     } = request.query as Record<string, string | undefined>;
 
     const where: any = {
-      repositoryId: repoId,
+      repositoryId: parseInt(repoId),
       dismissed: false,
     };
 
@@ -188,7 +212,7 @@ export async function apiRoutes(server: FastifyInstance) {
     const { sha } = request.body as { sha?: string };
 
     const repository = await prisma.repository.findUnique({
-      where: { id: repoId },
+      where: { id: parseInt(repoId) },
     });
 
     if (!repository) {
@@ -203,6 +227,32 @@ export async function apiRoutes(server: FastifyInstance) {
       repository: repository.fullName,
       sha: sha || repository.defaultBranch,
     };
+  });
+
+  // Get fix runs for a repository by ID
+  server.get('/repositories/:repoId/fixes', async (request, reply) => {
+    const { repoId } = request.params as { repoId: string };
+
+    const repository = await prisma.repository.findUnique({
+      where: { id: parseInt(repoId) },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({ error: 'Repository not found' });
+    }
+
+    const fixRuns = await prisma.fixRun.findMany({
+      where: { repositoryId: repository.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        analysis: {
+          select: { id: true, prNumber: true, headSha: true },
+        },
+      },
+    });
+
+    return fixRuns;
   });
 
   // Get repositories for an installation
@@ -276,8 +326,35 @@ export async function apiRoutes(server: FastifyInstance) {
     return { analyses, total };
   });
 
-  // Get analysis details
+  // Get analysis details (by /analysis/:analysisId for backwards compatibility)
   server.get('/analysis/:analysisId', async (request, reply) => {
+    const { analysisId } = request.params as { analysisId: string };
+
+    const analysis = await prisma.analysis.findUnique({
+      where: { id: analysisId },
+      include: {
+        repository: true,
+        findings: {
+          orderBy: [
+            { severity: 'asc' },
+            { createdAt: 'desc' },
+          ],
+        },
+        fixRuns: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!analysis) {
+      return reply.status(404).send({ error: 'Analysis not found' });
+    }
+
+    return analysis;
+  });
+
+  // Get analysis details (by /analyses/:id for frontend compatibility)
+  server.get('/analyses/:analysisId', async (request, reply) => {
     const { analysisId } = request.params as { analysisId: string };
 
     const analysis = await prisma.analysis.findUnique({
@@ -367,6 +444,67 @@ export async function apiRoutes(server: FastifyInstance) {
     return finding;
   });
 
+  // Update a finding (PATCH for frontend compatibility)
+  server.patch('/findings/:findingId', async (request, reply) => {
+    const { findingId } = request.params as { findingId: string };
+    const { status, dismissed } = request.body as { status?: string; dismissed?: boolean };
+
+    const data: any = {};
+    if (status !== undefined) {
+      data.status = status;
+    }
+    if (dismissed !== undefined) {
+      data.dismissed = dismissed;
+      if (dismissed) {
+        data.dismissedAt = new Date();
+      }
+    }
+
+    const finding = await prisma.finding.update({
+      where: { id: findingId },
+      data,
+    });
+
+    return finding;
+  });
+
+  // Trigger fix for a finding
+  server.post('/findings/:findingId/fix', async (request, reply) => {
+    const { findingId } = request.params as { findingId: string };
+
+    const finding = await prisma.finding.findUnique({
+      where: { id: findingId },
+      include: {
+        repository: true,
+        analysis: true,
+      },
+    });
+
+    if (!finding) {
+      return reply.status(404).send({ error: 'Finding not found' });
+    }
+
+    // Queue a fix job (placeholder for now)
+    const fixRun = await prisma.fixRun.create({
+      data: {
+        repositoryId: finding.repositoryId,
+        analysisId: finding.analysisId,
+        actionId: finding.fixType || 'auto_fix',
+        actionLabel: `Fix ${finding.ruleName}`,
+        triggeredBy: 'api',
+        requestedAction: `fix_${finding.ruleId}`,
+        status: 'pending',
+      },
+    });
+
+    return {
+      jobId: fixRun.id,
+      message: 'Fix queued',
+      findingId: finding.id,
+      fixType: finding.fixType,
+    };
+  });
+
   // Get policies for an installation
   server.get('/installations/:installationId/policies', async (request, reply) => {
     const { installationId } = request.params as { installationId: string };
@@ -390,6 +528,26 @@ export async function apiRoutes(server: FastifyInstance) {
     
     await policyEngine.deletePolicy(parseInt(policyId));
     return { success: true };
+  });
+
+  // Update policy (PATCH for frontend compatibility)
+  server.patch('/policies/:policyId', async (request, reply) => {
+    const { policyId } = request.params as { policyId: string };
+    const data = request.body as any;
+
+    const existingPolicy = await prisma.policy.findUnique({
+      where: { id: parseInt(policyId) },
+    });
+
+    if (!existingPolicy) {
+      return reply.status(404).send({ error: 'Policy not found' });
+    }
+
+    const policy = await policyEngine.upsertPolicy(existingPolicy.installationId, {
+      ...data,
+      id: parseInt(policyId),
+    });
+    return policy;
   });
 
   // Get notification configs
@@ -431,6 +589,92 @@ export async function apiRoutes(server: FastifyInstance) {
     return { success: true };
   });
 
+  // Update notification config (PATCH for frontend compatibility)
+  server.patch('/notifications/:configId', async (request, reply) => {
+    const { configId } = request.params as { configId: string };
+    const data = request.body as any;
+
+    const config = await prisma.notificationConfig.update({
+      where: { id: parseInt(configId) },
+      data,
+    });
+
+    return config;
+  });
+
+  // Get security champions for an installation
+  server.get('/installations/:installationId/champions', async (request, reply) => {
+    const { installationId } = request.params as { installationId: string };
+
+    // Get all repositories for this installation
+    const repositories = await prisma.repository.findMany({
+      where: { installationId: parseInt(installationId), disabled: false },
+      select: { id: true },
+    });
+
+    const repoIds = repositories.map(r => r.id);
+
+    const champions = await prisma.securityChampion.findMany({
+      where: { repositoryId: { in: repoIds } },
+      orderBy: { championScore: 'desc' },
+      take: 50,
+    });
+
+    // Return with githubLogin alias for frontend compatibility
+    return champions.map(c => ({
+      ...c,
+      githubLogin: c.username,
+      avatarUrl: `https://github.com/${c.username}.png`,
+    }));
+  });
+
+  // Add security champion to an installation
+  server.post('/installations/:installationId/champions', async (request, reply) => {
+    const { installationId } = request.params as { installationId: string };
+    const { githubLogin, repositoryId } = request.body as { githubLogin: string; repositoryId?: number };
+
+    // If no repositoryId provided, use the first repository in the installation
+    let repoId: number | undefined = repositoryId;
+    if (!repoId) {
+      const firstRepo = await prisma.repository.findFirst({
+        where: { installationId: parseInt(installationId), disabled: false },
+        select: { id: true },
+      });
+      if (firstRepo) {
+        repoId = firstRepo.id;
+      }
+    }
+
+    if (!repoId) {
+      return reply.status(400).send({ error: 'No repository found for installation' });
+    }
+
+    const champion = await prisma.securityChampion.create({
+      data: {
+        repositoryId: repoId,
+        username: githubLogin,
+        championScore: 0,
+      },
+    });
+
+    // Return with githubLogin alias for frontend compatibility
+    return {
+      ...champion,
+      githubLogin: champion.username,
+    };
+  });
+
+  // Remove security champion
+  server.delete('/champions/:championId', async (request, reply) => {
+    const { championId } = request.params as { championId: string };
+
+    await prisma.securityChampion.delete({
+      where: { id: parseInt(championId) },
+    });
+
+    return { success: true };
+  });
+
   // Get security champions for a repository
   server.get('/repos/:owner/:repo/champions', async (request, reply) => {
     const { owner, repo } = request.params as { owner: string; repo: string };
@@ -449,7 +693,12 @@ export async function apiRoutes(server: FastifyInstance) {
       take: 20,
     });
 
-    return champions;
+    // Return with githubLogin alias for frontend compatibility
+    return champions.map(c => ({
+      ...c,
+      githubLogin: c.username,
+      avatarUrl: `https://github.com/${c.username}.png`,
+    }));
   });
 
   // Get benchmarks
