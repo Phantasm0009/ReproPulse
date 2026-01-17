@@ -25,14 +25,17 @@ import Link from 'next/link';
 export default function DashboardPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const installationId = searchParams.get('installation');
+  
+  // Handle both 'installation' and 'installation_id' (GitHub's redirect param)
+  const installationId = searchParams.get('installation') || searchParams.get('installation_id');
+  const setupAction = searchParams.get('setup_action');
 
   const { data: user } = useQuery({
     queryKey: ['user'],
     queryFn: api.getCurrentUser,
   });
 
-  const { data: installations } = useQuery({
+  const { data: installations, isLoading: installationsLoading } = useQuery({
     queryKey: ['installations'],
     queryFn: api.getInstallations,
   });
@@ -49,6 +52,15 @@ export default function DashboardPage() {
     enabled: !!installationId,
   });
 
+  // Handle GitHub App installation redirect - normalize the URL
+  useEffect(() => {
+    if (searchParams.get('installation_id') && !searchParams.get('installation')) {
+      const newParams = new URLSearchParams();
+      newParams.set('installation', searchParams.get('installation_id')!);
+      router.replace(`/dashboard?${newParams.toString()}`);
+    }
+  }, [searchParams, router]);
+
   // Auto-select first installation if none selected
   useEffect(() => {
     if (!installationId && installations && installations.length > 0) {
@@ -60,6 +72,20 @@ export default function DashboardPage() {
     await api.logout();
     router.push('/');
   };
+
+  // Show loading while fetching installations
+  if (installationsLoading) {
+    return (
+      <DashboardLayout user={user?.user} onLogout={handleLogout}>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading installations...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (!installationId) {
     return (

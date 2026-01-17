@@ -21,10 +21,40 @@ const server = Fastify({
 });
 
 async function main() {
-  // Register CORS
+  // Register CORS - must handle preflight requests properly
   await server.register(cors, {
-    origin: [config.urls.app, 'http://localhost:3000'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      const allowedOrigins = [
+        config.urls.app,
+        'http://localhost:3000',
+        'https://repro-pulse.vercel.app',
+        // Allow all vercel preview deployments
+        /\.vercel\.app$/,
+      ];
+      
+      const isAllowed = allowedOrigins.some(allowed => {
+        if (allowed instanceof RegExp) {
+          return allowed.test(origin);
+        }
+        return allowed === origin;
+      });
+      
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'), false);
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   // Health check

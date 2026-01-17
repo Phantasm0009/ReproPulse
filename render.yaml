@@ -7,6 +7,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: APP_URL
+        value: https://repro-pulse.vercel.app
+      - key: API_URL
+        value: https://repropulse.onrender.com
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
