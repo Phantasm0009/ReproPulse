@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   RefreshCw,
   ExternalLink,
+  CheckCircle2,
 } from 'lucide-react';
 import { api, type Analysis, type Finding, type Repository } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout';
@@ -22,6 +23,7 @@ import { ScoreHistoryChart } from '@/components/charts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -31,6 +33,7 @@ export default function RepositoryDetailPage() {
   const repoId = params.id as string;
   const installationId = searchParams.get('installation');
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: user } = useQuery({
     queryKey: ['user'],
@@ -54,22 +57,57 @@ export default function RepositoryDetailPage() {
 
   const triggerAnalysis = useMutation({
     mutationFn: () => api.triggerAnalysis(repoId),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      toast({
+        title: 'Analysis Started',
+        description: `Analysis has been queued for ${repository?.fullName || 'repository'}. This may take a few moments.`,
+        variant: 'success',
+      });
       queryClient.invalidateQueries({ queryKey: ['analyses', repoId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Analysis Failed',
+        description: error.message || 'Failed to start analysis. Please try again.',
+        variant: 'destructive',
+      });
     },
   });
 
   const triggerFix = useMutation({
     mutationFn: (findingId: string) => api.triggerFix(findingId),
     onSuccess: () => {
+      toast({
+        title: 'Fix Queued',
+        description: 'The fix has been queued and will be applied shortly.',
+        variant: 'success',
+      });
       queryClient.invalidateQueries({ queryKey: ['findings', repoId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Fix Failed',
+        description: error.message || 'Failed to apply fix. Please try again.',
+        variant: 'destructive',
+      });
     },
   });
 
   const dismissFinding = useMutation({
     mutationFn: (findingId: string) => api.updateFinding(findingId, { status: 'dismissed' }),
     onSuccess: () => {
+      toast({
+        title: 'Finding Dismissed',
+        description: 'The finding has been dismissed.',
+      });
       queryClient.invalidateQueries({ queryKey: ['findings', repoId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to dismiss finding.',
+        variant: 'destructive',
+      });
     },
   });
 
