@@ -2,6 +2,8 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { policyEngine } from '../services/policy-engine';
 import { createLogger } from '../config/logger';
+import { analysisQueue } from '../worker/queue';
+import { v4 as uuidv4 } from 'uuid';
 
 const logger = createLogger('api');
 
@@ -213,19 +215,43 @@ export async function apiRoutes(server: FastifyInstance) {
 
     const repository = await prisma.repository.findUnique({
       where: { id: parseInt(repoId) },
+      include: {
+        installation: true,
+      },
     });
 
     if (!repository) {
       return reply.status(404).send({ error: 'Repository not found' });
     }
 
+    const deliveryId = uuidv4();
+    const headSha = sha || repository.defaultBranch;
+
     // Queue analysis job
-    // For now, just return a placeholder
+    const job = await analysisQueue.add(
+      'manual-analysis',
+      {
+        deliveryId,
+        installationId: repository.installationId,
+        repositoryId: repository.id,
+        owner: repository.owner,
+        repo: repository.name,
+        headSha,
+        eventType: 'push' as const,
+        sender: 'api',
+      },
+      {
+        jobId: deliveryId,
+      }
+    );
+
+    logger.info({ jobId: job.id, repository: repository.fullName }, 'Manual analysis queued');
+
     return { 
-      jobId: `job-${Date.now()}`,
-      message: 'Analysis queued',
+      jobId: job.id || deliveryId,
+      message: 'Analysis queued successfully',
       repository: repository.fullName,
-      sha: sha || repository.defaultBranch,
+      sha: headSha,
     };
   });
 

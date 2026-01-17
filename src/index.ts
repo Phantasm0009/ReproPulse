@@ -5,8 +5,17 @@ import { webhooks } from './webhooks';
 import { prisma } from './lib/prisma';
 import { apiRoutes } from './routes/api';
 import { authRoutes } from './routes/auth';
+import { startWorkers, stopWorkers } from './worker/queue';
 
 const logger = createLogger('server');
+
+// Custom serializer to handle BigInt
+function bigIntSerializer(_key: string, value: unknown): unknown {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  return value;
+}
 
 const server = Fastify({
   logger: {
@@ -18,6 +27,12 @@ const server = Fastify({
         }
       : undefined,
   },
+});
+
+// Add reply serializer hook for BigInt
+server.addHook('preSerialization', async (_request, _reply, payload) => {
+  // Convert BigInt to strings in the payload
+  return JSON.parse(JSON.stringify(payload, bigIntSerializer));
 });
 
 async function main() {
@@ -104,6 +119,10 @@ async function main() {
       env: config.server.nodeEnv,
     }, 'Server started');
 
+    // Start BullMQ workers
+    startWorkers();
+    logger.info('BullMQ workers started');
+
     // Setup webhook proxy for local development
     if (config.server.isDev && config.urls.webhookProxy) {
       const SmeeClient = (await import('smee-client')).default;
@@ -126,6 +145,7 @@ async function main() {
   // Graceful shutdown
   const shutdown = async () => {
     logger.info('Shutting down...');
+    await stopWorkers();
     await server.close();
     await prisma.$disconnect();
     process.exit(0);
