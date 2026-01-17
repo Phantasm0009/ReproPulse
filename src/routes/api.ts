@@ -96,6 +96,115 @@ export async function apiRoutes(server: FastifyInstance) {
     };
   });
 
+  // Get repository by ID
+  server.get('/repositories/:repoId', async (request, reply) => {
+    const { repoId } = request.params as { repoId: string };
+
+    const repository = await prisma.repository.findUnique({
+      where: { id: repoId },
+      include: {
+        analyses: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        _count: {
+          select: { analyses: true, findings: true },
+        },
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({ error: 'Repository not found' });
+    }
+
+    return repository;
+  });
+
+  // Get analyses for a repository by ID
+  server.get('/repositories/:repoId/analyses', async (request, reply) => {
+    const { repoId } = request.params as { repoId: string };
+    const { limit = '20', page = '1' } = request.query as { limit?: string; page?: string };
+
+    const take = parseInt(limit);
+    const skip = (parseInt(page) - 1) * take;
+
+    const analyses = await prisma.analysis.findMany({
+      where: { repositoryId: repoId },
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
+      include: {
+        _count: {
+          select: { findings: true },
+        },
+      },
+    });
+
+    const total = await prisma.analysis.count({
+      where: { repositoryId: repoId },
+    });
+
+    return { analyses, total };
+  });
+
+  // Get findings for a repository by ID
+  server.get('/repositories/:repoId/findings', async (request, reply) => {
+    const { repoId } = request.params as { repoId: string };
+    const { 
+      severity, 
+      status,
+      limit = '50',
+      offset = '0',
+    } = request.query as Record<string, string | undefined>;
+
+    const where: any = {
+      repositoryId: repoId,
+      dismissed: false,
+    };
+
+    if (severity) {
+      where.severity = severity;
+    }
+    if (status) {
+      where.status = status;
+    }
+
+    const findings = await prisma.finding.findMany({
+      where,
+      orderBy: [
+        { severity: 'asc' },
+        { createdAt: 'desc' },
+      ],
+      take: parseInt(limit),
+      skip: parseInt(offset),
+    });
+
+    return findings;
+  });
+
+  // Trigger analysis for a repository
+  server.post('/repositories/:repoId/analyze', async (request, reply) => {
+    const { repoId } = request.params as { repoId: string };
+    const { sha } = request.body as { sha?: string };
+
+    const repository = await prisma.repository.findUnique({
+      where: { id: repoId },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({ error: 'Repository not found' });
+    }
+
+    // Queue analysis job
+    // For now, just return a placeholder
+    return { 
+      jobId: `job-${Date.now()}`,
+      message: 'Analysis queued',
+      repository: repository.fullName,
+      sha: sha || repository.defaultBranch,
+    };
+  });
+
   // Get repositories for an installation
   server.get('/installations/:installationId/repositories', async (request, reply) => {
     const { installationId } = request.params as { installationId: string };
