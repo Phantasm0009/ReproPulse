@@ -23,12 +23,12 @@ export async function apiRoutes(server: FastifyInstance) {
     return installations;
   });
 
-  // Get single installation by ID
+  // Get single installation by ID (uses GitHub installation ID)
   server.get('/installations/:installationId', async (request, reply) => {
     const { installationId } = request.params as { installationId: string };
 
     const installation = await prisma.installation.findUnique({
-      where: { id: parseInt(installationId) },
+      where: { installationId: parseInt(installationId) },
       include: {
         repositories: {
           where: { disabled: false },

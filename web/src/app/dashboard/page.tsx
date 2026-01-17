@@ -64,7 +64,7 @@ export default function DashboardPage() {
   // Auto-select first installation if none selected
   useEffect(() => {
     if (!installationId && installations && installations.length > 0) {
-      router.replace(`/dashboard?installation=${installations[0].id}`);
+      router.replace(`/dashboard?installation=${installations[0].installationId}`);
     }
   }, [installationId, installations, router]);
 

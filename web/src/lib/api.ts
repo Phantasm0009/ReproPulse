@@ -34,8 +34,8 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
 // Types
 export interface Installation {
-  id: string;
-  githubInstallationId: bigint;
+  id: number;
+  installationId: number;
   accountLogin: string;
   accountType: string;
   avatarUrl?: string;
