@@ -114,13 +114,19 @@ export default function RepositoryDetailPage() {
   const latestAnalysis = analysesData?.analyses[0];
   const openFindings = findings?.filter((f) => f.status === 'open') || [];
 
+  // Helper to get score from analysis (handles both score and overallScore)
+  const getScore = (analysis: Analysis | undefined) => {
+    if (!analysis) return 0;
+    return analysis.score ?? analysis.overallScore ?? 0;
+  };
+
   // Prepare chart data
   const scoreHistory = analysesData?.analyses
     .slice()
     .reverse()
     .map((a) => ({
       date: formatDate(a.createdAt).split(',')[0],
-      score: a.score,
+      score: getScore(a),
     })) || [];
 
   return (
@@ -172,9 +178,9 @@ export default function RepositoryDetailPage() {
             <CardContent>
               {latestAnalysis ? (
                 <div className="flex items-center gap-4">
-                  <ScoreGauge score={latestAnalysis.score} size="sm" showLabel={false} />
+                  <ScoreGauge score={getScore(latestAnalysis)} size="sm" showLabel={false} />
                   <div>
-                    <p className="text-2xl font-bold">{latestAnalysis.score}</p>
+                    <p className="text-2xl font-bold">{getScore(latestAnalysis)}</p>
                     {latestAnalysis.percentile && (
                       <p className="text-xs text-muted-foreground">
                         {latestAnalysis.percentile}th percentile
@@ -217,23 +223,42 @@ export default function RepositoryDetailPage() {
               <CardTitle className="text-sm font-medium">Score Breakdown</CardTitle>
             </CardHeader>
             <CardContent>
-              {latestAnalysis ? (
+              {latestAnalysis?.breakdown ? (
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span>Workflow</span>
-                    <span>{latestAnalysis.breakdown.workflowSecurity}/40</span>
+                    <span>{latestAnalysis.breakdown.workflowSecurity ?? 0}/40</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Supply Chain</span>
-                    <span>{latestAnalysis.breakdown.supplyChain}/30</span>
+                    <span>{latestAnalysis.breakdown.supplyChain ?? 0}/30</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Maintainability</span>
-                    <span>{latestAnalysis.breakdown.maintainability}/20</span>
+                    <span>{latestAnalysis.breakdown.maintainability ?? 0}/20</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Hygiene</span>
-                    <span>{latestAnalysis.breakdown.hygiene}/10</span>
+                    <span>{latestAnalysis.breakdown.hygiene ?? 0}/10</span>
+                  </div>
+                </div>
+              ) : latestAnalysis ? (
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Workflow</span>
+                    <span>{latestAnalysis.workflowScore ?? 0}/40</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Supply Chain</span>
+                    <span>{latestAnalysis.supplyChainScore ?? 0}/30</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Maintainability</span>
+                    <span>{latestAnalysis.maintainabilityScore ?? 0}/20</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Hygiene</span>
+                    <span>{latestAnalysis.hygieneScore ?? 0}/10</span>
                   </div>
                 </div>
               ) : (
@@ -365,7 +390,7 @@ function AnalysisRow({ analysis, installationId }: AnalysisRowProps) {
             {analysis.prNumber ? (
               <span className="font-medium">PR #{analysis.prNumber}</span>
             ) : (
-              <span className="font-medium">{analysis.ref || analysis.sha.slice(0, 7)}</span>
+              <span className="font-medium">{analysis.ref || analysis.sha?.slice(0, 7) || 'Unknown'}</span>
             )}
             <Badge variant={analysis.status === 'completed' ? 'success' : 'secondary'}>
               {analysis.status}
@@ -376,7 +401,7 @@ function AnalysisRow({ analysis, installationId }: AnalysisRowProps) {
           </p>
         </div>
       </div>
-      <ScoreBadge score={analysis.score} />
+      <ScoreBadge score={analysis.score ?? analysis.overallScore ?? 0} />
     </Link>
   );
 }

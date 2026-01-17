@@ -62,13 +62,19 @@ export interface Analysis {
   prNumber?: number;
   score: number;
   percentile?: number;
-  breakdown: AnalysisBreakdown;
+  breakdown?: AnalysisBreakdown;
+  // Direct score fields from database
+  overallScore?: number;
+  workflowScore?: number;
+  supplyChainScore?: number;
+  maintainabilityScore?: number;
+  hygieneScore?: number;
   status: string;
-  checkRunId?: bigint;
+  checkRunId?: string;
   createdAt: string;
   completedAt?: string;
-  repository: Repository;
-  findings: Finding[];
+  repository?: Repository;
+  findings?: Finding[];
 }
 
 export interface AnalysisBreakdown {

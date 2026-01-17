@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: 'RepoPulse - PR Health & Security Scoring',
   description: 'Automated PR health and security scoring with one-click fixes for GitHub repositories',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/favicon.svg',
   },
 };
 
