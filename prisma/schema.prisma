@@ -1,0 +1,377 @@
+// Prisma schema for RepoPulse GitHub App
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// GitHub App Installation
+model Installation {
+  id                  Int       @id @default(autoincrement())
+  installationId      Int       @unique @map("installation_id")
+  accountId           Int       @map("account_id")
+  accountLogin        String    @map("account_login")
+  accountType         String    @map("account_type") // User or Organization
+  targetType          String    @map("target_type")
+  permissions         Json
+  events              String[]
+  repositorySelection String    @map("repository_selection") // all or selected
+  suspended           Boolean   @default(false)
+  suspendedAt         DateTime? @map("suspended_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  repositories Repository[]
+  policies     Policy[]
+  notifications NotificationConfig[]
+  
+  @@map("installations")
+}
+
+// Repository tracked by RepoPulse
+model Repository {
+  id              Int       @id @default(autoincrement())
+  githubId        Int       @unique @map("github_id")
+  installationId  Int       @map("installation_id")
+  owner           String
+  name            String
+  fullName        String    @map("full_name")
+  private         Boolean   @default(false)
+  defaultBranch   String    @default("main") @map("default_branch")
+  language        String?
+  sizeBucket      String?   @map("size_bucket") // small, medium, large, xlarge
+  stars           Int       @default(0)
+  forks           Int       @default(0)
+  archived        Boolean   @default(false)
+  disabled        Boolean   @default(false)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  installation    Installation @relation(fields: [installationId], references: [installationId])
+  analyses        Analysis[]
+  benchmarks      Benchmark[]
+  findings        Finding[]
+  fixRuns         FixRun[]
+  prComments      PRComment[]
+  champions       SecurityChampion[]
+  
+  @@unique([owner, name])
+  @@map("repositories")
+}
+
+// Analysis run for a PR or push
+model Analysis {
+  id              String    @id @default(cuid())
+  repositoryId    Int       @map("repository_id")
+  checkRunId      BigInt?   @map("check_run_id")
+  checkSuiteId    BigInt?   @map("check_suite_id")
+  prNumber        Int?      @map("pr_number")
+  headSha         String    @map("head_sha")
+  baseSha         String?   @map("base_sha")
+  ref             String?
+  eventType       String    @map("event_type") // pull_request, push
+  status          String    @default("queued") // queued, in_progress, completed, failed
+  conclusion      String?   // success, failure, neutral, cancelled, skipped, timed_out, action_required
+  
+  // Scores
+  overallScore    Int?      @map("overall_score")
+  workflowScore   Int?      @map("workflow_score")
+  supplyChainScore Int?     @map("supply_chain_score")
+  maintainabilityScore Int? @map("maintainability_score")
+  hygieneScore    Int?      @map("hygiene_score")
+  
+  // Benchmark data
+  percentile      Int?
+  percentileDelta Int?      @map("percentile_delta")
+  cohortKey       String?   @map("cohort_key")
+  
+  // Results
+  summary         String?
+  detailsUrl      String?   @map("details_url")
+  findingsCount   Int       @default(0) @map("findings_count")
+  criticalCount   Int       @default(0) @map("critical_count")
+  highCount       Int       @default(0) @map("high_count")
+  mediumCount     Int       @default(0) @map("medium_count")
+  lowCount        Int       @default(0) @map("low_count")
+  
+  // Metadata
+  deliveryId      String?   @unique @map("delivery_id") // For idempotency
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  repository      Repository @relation(fields: [repositoryId], references: [id])
+  findings        Finding[]
+  fixRuns         FixRun[]
+  
+  @@index([repositoryId, prNumber])
+  @@index([headSha])
+  @@map("analyses")
+}
+
+// Individual finding from analysis
+model Finding {
+  id              String    @id @default(cuid())
+  analysisId      String    @map("analysis_id")
+  repositoryId    Int       @map("repository_id")
+  
+  // Classification
+  category        String    // workflow_security, supply_chain, maintainability, attack_pattern
+  ruleId          String    @map("rule_id")
+  ruleName        String    @map("rule_name")
+  severity        String    // critical, high, medium, low, info
+  confidence      String    // high, medium, low
+  
+  // Location
+  filePath        String?   @map("file_path")
+  startLine       Int?      @map("start_line")
+  endLine         Int?      @map("end_line")
+  
+  // Details
+  title           String
+  description     String
+  remediation     String?
+  snippet         String?   // Code snippet
+  metadata        Json?     // Additional context
+  
+  // State
+  isNew           Boolean   @default(true) @map("is_new") // Introduced in this PR
+  dismissed       Boolean   @default(false)
+  dismissedBy     String?   @map("dismissed_by")
+  dismissedAt     DateTime? @map("dismissed_at")
+  dismissReason   String?   @map("dismiss_reason")
+  
+  // Fix tracking
+  fixable         Boolean   @default(false)
+  fixType         String?   @map("fix_type") // auto, manual, issue
+  fixed           Boolean   @default(false)
+  fixedAt         DateTime? @map("fixed_at")
+  fixedBy         String?   @map("fixed_by")
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  analysis        Analysis  @relation(fields: [analysisId], references: [id])
+  repository      Repository @relation(fields: [repositoryId], references: [id])
+  
+  @@index([analysisId])
+  @@index([repositoryId, category])
+  @@index([severity])
+  @@map("findings")
+}
+
+// One-click fix execution record
+model FixRun {
+  id              String    @id @default(cuid())
+  analysisId      String    @map("analysis_id")
+  repositoryId    Int       @map("repository_id")
+  
+  // Fix type
+  actionId        String    @map("action_id") // pin_actions, add_permissions, open_issue
+  actionLabel     String    @map("action_label")
+  
+  // Execution
+  status          String    @default("pending") // pending, in_progress, completed, failed
+  result          String?   // success, partial, failed
+  resultMessage   String?   @map("result_message")
+  
+  // Git operations
+  commitSha       String?   @map("commit_sha")
+  prNumber        Int?      @map("pr_number")
+  issueNumber     Int?      @map("issue_number")
+  patchApplied    String?   @map("patch_applied")
+  
+  // Who triggered
+  triggeredBy     String    @map("triggered_by") // GitHub username
+  requestedAction String    @map("requested_action") // The action identifier from check run
+  
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  analysis        Analysis  @relation(fields: [analysisId], references: [id])
+  repository      Repository @relation(fields: [repositoryId], references: [id])
+  
+  @@index([analysisId])
+  @@map("fix_runs")
+}
+
+// Benchmark aggregates per cohort
+model Benchmark {
+  id              Int       @id @default(autoincrement())
+  repositoryId    Int?      @map("repository_id")
+  
+  // Cohort definition
+  cohortKey       String    @map("cohort_key") // e.g., "typescript:medium"
+  language        String?
+  sizeBucket      String?   @map("size_bucket")
+  
+  // Aggregated stats
+  sampleSize      Int       @default(0) @map("sample_size")
+  avgScore        Float     @map("avg_score")
+  medianScore     Float     @map("median_score")
+  p10Score        Float     @map("p10_score")
+  p25Score        Float     @map("p25_score")
+  p75Score        Float     @map("p75_score")
+  p90Score        Float     @map("p90_score")
+  
+  // Sub-scores
+  avgWorkflow     Float     @map("avg_workflow")
+  avgSupplyChain  Float     @map("avg_supply_chain")
+  avgMaintainability Float  @map("avg_maintainability")
+  avgHygiene      Float     @map("avg_hygiene")
+  
+  // Time window
+  windowStart     DateTime  @map("window_start")
+  windowEnd       DateTime  @map("window_end")
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  repository      Repository? @relation(fields: [repositoryId], references: [id])
+  
+  @@unique([cohortKey, windowStart])
+  @@index([cohortKey])
+  @@map("benchmarks")
+}
+
+// Organization/Repo policy configuration
+model Policy {
+  id              Int       @id @default(autoincrement())
+  installationId  Int       @map("installation_id")
+  repositoryId    Int?      @map("repository_id") // null = org-wide
+  
+  name            String
+  description     String?
+  enabled         Boolean   @default(true)
+  
+  // Thresholds
+  minOverallScore Int?      @map("min_overall_score")
+  minWorkflowScore Int?     @map("min_workflow_score")
+  minSupplyChainScore Int?  @map("min_supply_chain_score")
+  minMaintainabilityScore Int? @map("min_maintainability_score")
+  minHygieneScore Int?      @map("min_hygiene_score")
+  
+  // Failure conditions
+  failOnCritical  Boolean   @default(true) @map("fail_on_critical")
+  failOnHigh      Boolean   @default(false) @map("fail_on_high")
+  maxCriticalFindings Int?  @map("max_critical_findings")
+  maxHighFindings Int?      @map("max_high_findings")
+  
+  // Actions
+  blockMerge      Boolean   @default(false) @map("block_merge")
+  requireApproval Boolean   @default(false) @map("require_approval")
+  autoFix         Boolean   @default(false) @map("auto_fix")
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  installation    Installation @relation(fields: [installationId], references: [installationId])
+  
+  @@index([installationId])
+  @@map("policies")
+}
+
+// PR comment tracking for single-comment update mode
+model PRComment {
+  id              Int       @id @default(autoincrement())
+  repositoryId    Int       @map("repository_id")
+  prNumber        Int       @map("pr_number")
+  commentId       BigInt    @map("comment_id")
+  threadMode      Boolean   @default(true) @map("thread_mode")
+  lastAnalysisId  String?   @map("last_analysis_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  repository      Repository @relation(fields: [repositoryId], references: [id])
+  
+  @@unique([repositoryId, prNumber])
+  @@map("pr_comments")
+}
+
+// Notification configuration
+model NotificationConfig {
+  id              Int       @id @default(autoincrement())
+  installationId  Int       @map("installation_id")
+  repositoryId    Int?      @map("repository_id") // null = org-wide
+  
+  // Channel type
+  channelType     String    @map("channel_type") // slack, discord, email
+  channelId       String    @map("channel_id")
+  webhookUrl      String?   @map("webhook_url")
+  
+  // What to notify
+  onCritical      Boolean   @default(true) @map("on_critical")
+  onHigh          Boolean   @default(false) @map("on_high")
+  onScoreDrop     Boolean   @default(true) @map("on_score_drop")
+  scoreDropThreshold Int    @default(10) @map("score_drop_threshold")
+  onPolicyFail    Boolean   @default(true) @map("on_policy_fail")
+  onFixApplied    Boolean   @default(false) @map("on_fix_applied")
+  
+  enabled         Boolean   @default(true)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  installation    Installation @relation(fields: [installationId], references: [installationId])
+  
+  @@map("notification_configs")
+}
+
+// Security champions tracking
+model SecurityChampion {
+  id              Int       @id @default(autoincrement())
+  repositoryId    Int       @map("repository_id")
+  username        String
+  
+  // Stats
+  findingsFixed   Int       @default(0) @map("findings_fixed")
+  findingsIntroduced Int    @default(0) @map("findings_introduced")
+  fixPRsCreated   Int       @default(0) @map("fix_prs_created")
+  issuesOpened    Int       @default(0) @map("issues_opened")
+  
+  // Calculated score
+  championScore   Int       @default(0) @map("champion_score")
+  
+  lastActivityAt  DateTime? @map("last_activity_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  repository      Repository @relation(fields: [repositoryId], references: [id])
+  
+  @@unique([repositoryId, username])
+  @@map("security_champions")
+}
+
+// Webhook delivery tracking for idempotency
+model WebhookDelivery {
+  id              String    @id
+  event           String
+  action          String?
+  processed       Boolean   @default(false)
+  processedAt     DateTime? @map("processed_at")
+  payload         Json?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  @@index([event, action])
+  @@map("webhook_deliveries")
+}
+
+// User sessions for dashboard
+model UserSession {
+  id              String    @id @default(cuid())
+  githubId        Int       @map("github_id")
+  username        String
+  accessToken     String    @map("access_token")
+  refreshToken    String?   @map("refresh_token")
+  expiresAt       DateTime? @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  @@unique([githubId])
+  @@map("user_sessions")
+}

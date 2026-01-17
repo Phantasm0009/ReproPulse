@@ -1,0 +1,61 @@
+{
+  "name": "repopulse",
+  "version": "1.0.0",
+  "description": "GitHub App for PR Health & Security scoring with one-click fixes",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:worker\" \"npm run dev:web\"",
+    "dev:server": "tsx watch src/index.ts",
+    "dev:worker": "tsx watch src/worker/index.ts",
+    "dev:web": "cd web && npm run dev",
+    "build": "tsc && cd web && npm run build",
+    "build:server": "tsc",
+    "start": "node dist/index.js",
+    "start:worker": "node dist/worker/index.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@octokit/auth-app": "^6.0.3",
+    "@octokit/rest": "^20.0.2",
+    "@octokit/webhooks": "^12.0.10",
+    "@octokit/webhooks-types": "^7.3.1",
+    "@prisma/client": "^5.7.1",
+    "@slack/web-api": "^6.11.0",
+    "bullmq": "^5.1.0",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "fastest-levenshtein": "^1.0.16",
+    "fastify": "^4.25.2",
+    "ioredis": "^5.3.2",
+    "js-yaml": "^4.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "nanoid": "^5.0.4",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1",
+    "smee-client": "^2.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^20.10.6",
+    "@typescript-eslint/eslint-plugin": "^6.17.0",
+    "@typescript-eslint/parser": "^6.17.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "prisma": "^5.7.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
