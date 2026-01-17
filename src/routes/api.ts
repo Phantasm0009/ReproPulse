@@ -23,6 +23,79 @@ export async function apiRoutes(server: FastifyInstance) {
     return installations;
   });
 
+  // Get stats for an installation
+  server.get('/installations/:installationId/stats', async (request, reply) => {
+    const { installationId } = request.params as { installationId: string };
+    const instId = parseInt(installationId);
+
+    const [
+      totalRepositories,
+      totalFindings,
+      criticalFindings,
+      recentAnalysesCount,
+      fixesApplied,
+      recentAnalyses,
+    ] = await Promise.all([
+      prisma.repository.count({ 
+        where: { installationId: instId, disabled: false } 
+      }),
+      prisma.finding.count({ 
+        where: { 
+          repository: { installationId: instId },
+          dismissed: false 
+        } 
+      }),
+      prisma.finding.count({ 
+        where: { 
+          repository: { installationId: instId },
+          severity: 'CRITICAL',
+          dismissed: false 
+        } 
+      }),
+      prisma.analysis.count({
+        where: {
+          repository: { installationId: instId },
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        },
+      }),
+      prisma.fixRun.count({
+        where: {
+          analysis: { repository: { installationId: instId } },
+          status: 'COMPLETED',
+        },
+      }),
+      prisma.analysis.findMany({
+        where: { repository: { installationId: instId } },
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          repository: {
+            select: { owner: true, name: true, fullName: true },
+          },
+        },
+      }),
+    ]);
+
+    // Calculate average score
+    const avgScoreResult = await prisma.analysis.aggregate({
+      where: { 
+        repository: { installationId: instId },
+        overallScore: { not: null },
+      },
+      _avg: { overallScore: true },
+    });
+
+    return {
+      totalRepositories,
+      averageScore: avgScoreResult._avg.overallScore ?? 0,
+      totalFindings,
+      criticalFindings,
+      recentAnalyses: recentAnalysesCount,
+      fixesApplied,
+      analyses: recentAnalyses,
+    };
+  });
+
   // Get repositories for an installation
   server.get('/installations/:installationId/repositories', async (request, reply) => {
     const { installationId } = request.params as { installationId: string };

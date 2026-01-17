@@ -205,4 +205,33 @@ export async function authRoutes(server: FastifyInstance) {
       url: `https://github.com/apps/${process.env.GITHUB_APP_SLUG || 'repopulse'}/installations/new`,
     };
   });
+
+  // Get current user (alias for /session that frontend expects)
+  server.get('/me', async (request, reply) => {
+    const sessionId = request.headers['x-session-id'] as string;
+    
+    if (!sessionId) {
+      return { user: null };
+    }
+
+    const session = await prisma.userSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) {
+      return { user: null };
+    }
+
+    // Check if expired
+    if (session.expiresAt && session.expiresAt < new Date()) {
+      return { user: null };
+    }
+
+    return {
+      user: {
+        login: session.username,
+        avatarUrl: `https://github.com/${session.username}.png`,
+      },
+    };
+  });
 }
