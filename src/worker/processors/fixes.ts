@@ -28,7 +28,7 @@ export interface FixJobData {
   triggeredBy: string;
 }
 
-export async function processFixJob(job: Job<FixJobData>): Promise<void> {
+export async function processFixJob(job: Job<FixJobData, unknown, string>): Promise<void> {
   const {
     actionId,
     analysisId,

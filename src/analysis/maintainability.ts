@@ -11,10 +11,14 @@ export interface MaintainabilityFinding {
   title: string;
   description: string;
   remediation: string;
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
+  snippet?: string;
   metadata?: Record<string, unknown>;
 }
 
-interface RepoStats {
+export interface RepoStats {
   repo: {
     name: string;
     full_name: string;
@@ -34,7 +38,7 @@ interface RepoStats {
   releases: Array<{
     id: number;
     tag_name: string;
-    published_at: string;
+    published_at: string | null;
     prerelease: boolean;
     draft: boolean;
   }>;
@@ -316,7 +320,7 @@ export class MaintainabilityScanner {
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     
     const recentReleases = productionReleases.filter(r => 
-      new Date(r.published_at) > oneYearAgo
+      r.published_at && new Date(r.published_at) > oneYearAgo
     );
     
     if (recentReleases.length === 0) {

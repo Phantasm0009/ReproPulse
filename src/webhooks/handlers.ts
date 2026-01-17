@@ -87,7 +87,7 @@ webhooks.on('push', async ({ id, payload }) => {
     deliveryId: id,
     installationId: event.installation?.id || 0,
     repositoryId: event.repository.id,
-    owner: event.repository.owner.login || event.repository.owner.name,
+    owner: event.repository.owner.login || event.repository.owner.name || '',
     repo: event.repository.name,
     headSha: event.after,
     baseSha: event.before !== '0000000000000000000000000000000000000000' ? event.before : undefined,

@@ -1,4 +1,4 @@
-import { Queue, Worker, Job } from 'bullmq';
+import { Queue, Worker, Job, ConnectionOptions } from 'bullmq';
 import { createRedisConnection } from '../lib/redis';
 import { createLogger } from '../config/logger';
 import { processAnalysisJob, AnalysisJobData } from './processors/analysis';
@@ -14,9 +14,9 @@ export const QUEUE_NAMES = {
   NOTIFICATIONS: 'notifications',
 } as const;
 
-// Create queues
-export const analysisQueue = new Queue<AnalysisJobData>(QUEUE_NAMES.ANALYSIS, {
-  connection: createRedisConnection(),
+// Create queues with string job names
+export const analysisQueue = new Queue<AnalysisJobData, unknown, string>(QUEUE_NAMES.ANALYSIS, {
+  connection: createRedisConnection() as ConnectionOptions,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -28,8 +28,8 @@ export const analysisQueue = new Queue<AnalysisJobData>(QUEUE_NAMES.ANALYSIS, {
   },
 });
 
-export const fixesQueue = new Queue<FixJobData>(QUEUE_NAMES.FIXES, {
-  connection: createRedisConnection(),
+export const fixesQueue = new Queue<FixJobData, unknown, string>(QUEUE_NAMES.FIXES, {
+  connection: createRedisConnection() as ConnectionOptions,
   defaultJobOptions: {
     attempts: 2,
     backoff: {
@@ -41,8 +41,8 @@ export const fixesQueue = new Queue<FixJobData>(QUEUE_NAMES.FIXES, {
   },
 });
 
-export const notificationsQueue = new Queue<NotificationJobData>(QUEUE_NAMES.NOTIFICATIONS, {
-  connection: createRedisConnection(),
+export const notificationsQueue = new Queue<NotificationJobData, unknown, string>(QUEUE_NAMES.NOTIFICATIONS, {
+  connection: createRedisConnection() as ConnectionOptions,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -55,17 +55,17 @@ export const notificationsQueue = new Queue<NotificationJobData>(QUEUE_NAMES.NOT
 });
 
 // Create workers
-let analysisWorker: Worker<AnalysisJobData>;
-let fixesWorker: Worker<FixJobData>;
-let notificationsWorker: Worker<NotificationJobData>;
+let analysisWorker: Worker<AnalysisJobData, unknown, string>;
+let fixesWorker: Worker<FixJobData, unknown, string>;
+let notificationsWorker: Worker<NotificationJobData, unknown, string>;
 
 export function startWorkers(): void {
-  const connection = createRedisConnection();
+  const connection = createRedisConnection() as ConnectionOptions;
 
   // Analysis worker
-  analysisWorker = new Worker<AnalysisJobData>(
+  analysisWorker = new Worker<AnalysisJobData, unknown, string>(
     QUEUE_NAMES.ANALYSIS,
-    async (job: Job<AnalysisJobData>) => {
+    async (job: Job<AnalysisJobData, unknown, string>) => {
       logger.info({ jobId: job.id, data: job.data }, 'Processing analysis job');
       return processAnalysisJob(job);
     },
@@ -84,14 +84,14 @@ export function startWorkers(): void {
   });
 
   // Fixes worker
-  fixesWorker = new Worker<FixJobData>(
+  fixesWorker = new Worker<FixJobData, unknown, string>(
     QUEUE_NAMES.FIXES,
-    async (job: Job<FixJobData>) => {
+    async (job: Job<FixJobData, unknown, string>) => {
       logger.info({ jobId: job.id, data: job.data }, 'Processing fix job');
       return processFixJob(job);
     },
     {
-      connection: createRedisConnection(),
+      connection: createRedisConnection() as ConnectionOptions,
       concurrency: 3,
     }
   );
@@ -105,14 +105,14 @@ export function startWorkers(): void {
   });
 
   // Notifications worker
-  notificationsWorker = new Worker<NotificationJobData>(
+  notificationsWorker = new Worker<NotificationJobData, unknown, string>(
     QUEUE_NAMES.NOTIFICATIONS,
-    async (job: Job<NotificationJobData>) => {
+    async (job: Job<NotificationJobData, unknown, string>) => {
       logger.info({ jobId: job.id, data: job.data }, 'Processing notification job');
       return processNotificationJob(job);
     },
     {
-      connection: createRedisConnection(),
+      connection: createRedisConnection() as ConnectionOptions,
       concurrency: 10,
     }
   );

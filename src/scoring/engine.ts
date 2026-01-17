@@ -33,7 +33,9 @@ export interface FindingsSummary {
   };
 }
 
-type AnyFinding = WorkflowFinding | SupplyChainFinding | MaintainabilityFinding | AttackPatternFinding;
+type AnyFinding = (WorkflowFinding | SupplyChainFinding | MaintainabilityFinding | AttackPatternFinding) & {
+  filePath?: string;
+};
 
 // Weight multiplier for PR-introduced findings vs legacy debt
 const PR_INTRODUCED_WEIGHT = 2.5;

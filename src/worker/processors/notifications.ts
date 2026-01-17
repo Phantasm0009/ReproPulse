@@ -36,7 +36,7 @@ export interface NotificationJobData {
   };
 }
 
-export async function processNotificationJob(job: Job<NotificationJobData>): Promise<void> {
+export async function processNotificationJob(job: Job<NotificationJobData, unknown, string>): Promise<void> {
   const { type, installationId, repositoryId, analysisId, data } = job.data;
 
   logger.info({ type, repositoryId }, 'Processing notification');
@@ -139,9 +139,11 @@ async function sendSlackNotification(
   } else if (config.slack.botToken) {
     // Send via API
     const slack = new WebClient(config.slack.botToken);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await slack.chat.postMessage({
       channel: notifConfig.channelId,
-      ...message,
+      text: message.text,
+      blocks: message.blocks as any,
     });
   }
 

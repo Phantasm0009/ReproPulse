@@ -39,7 +39,7 @@ export interface AnalysisJobData {
   sender: string;
 }
 
-export async function processAnalysisJob(job: Job<AnalysisJobData>): Promise<void> {
+export async function processAnalysisJob(job: Job<AnalysisJobData, unknown, string>): Promise<void> {
   const { 
     deliveryId, 
     installationId, 
@@ -191,13 +191,13 @@ export async function processAnalysisJob(job: Job<AnalysisJobData>): Promise<voi
           ruleName: finding.ruleName,
           severity: finding.severity,
           confidence: finding.confidence,
-          filePath: finding.filePath,
-          startLine: finding.startLine,
-          endLine: finding.endLine,
+          filePath: 'filePath' in finding ? (finding.filePath as string | undefined) : undefined,
+          startLine: 'startLine' in finding ? (finding.startLine as number | undefined) : undefined,
+          endLine: 'endLine' in finding ? (finding.endLine as number | undefined) : undefined,
           title: finding.title,
           description: finding.description,
           remediation: finding.remediation,
-          snippet: finding.snippet,
+          snippet: 'snippet' in finding ? (finding.snippet as string | undefined) : undefined,
           metadata: finding.metadata ? JSON.parse(JSON.stringify(finding.metadata)) : undefined,
           isNew: isPR, // Mark as new if from PR
           fixable: isFixable(finding),
@@ -373,10 +373,34 @@ async function analyzeMaintainability(
   ref: string
 ) {
   try {
-    const [stats, tree] = await Promise.all([
+    const [rawStats, tree] = await Promise.all([
       getRepoStats(octokit, owner, repo),
       getRepoTree(octokit, owner, repo, ref),
     ]);
+
+    // Transform stats to match expected type
+    const stats = {
+      repo: rawStats.repo,
+      releases: rawStats.releases.map(r => ({
+        id: r.id,
+        tag_name: r.tag_name,
+        published_at: r.published_at || null,
+        prerelease: r.prerelease,
+        draft: r.draft,
+      })),
+      issues: rawStats.issues.map(i => ({
+        id: i.id,
+        number: i.number,
+        state: i.state,
+        created_at: i.created_at,
+        updated_at: i.updated_at,
+        closed_at: i.closed_at,
+        pull_request: i.pull_request,
+        labels: (i.labels || []).map(l => 
+          typeof l === 'string' ? { name: l } : { name: l.name || '' }
+        ),
+      })),
+    };
 
     return maintainabilityScanner.analyze(stats, tree);
   } catch (error) {
