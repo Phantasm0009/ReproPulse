@@ -22,7 +22,8 @@ import { FindingsList, SeverityBadge } from '@/components/findings';
 import { ScoreHistoryChart } from '@/components/charts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { RelativeTime } from '@/components/relative-time';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -213,7 +214,7 @@ export default function RepositoryDetailPage() {
             <CardContent>
               <p className="text-2xl font-bold">{analysesData?.total || 0}</p>
               <p className="text-xs text-muted-foreground">
-                Last: {latestAnalysis ? formatRelativeTime(latestAnalysis.createdAt) : 'Never'}
+                Last: {latestAnalysis ? <RelativeTime date={latestAnalysis.createdAt} /> : 'Never'}
               </p>
             </CardContent>
           </Card>
@@ -397,7 +398,7 @@ function AnalysisRow({ analysis, installationId }: AnalysisRowProps) {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            {formatRelativeTime(analysis.createdAt)} • {analysis.findings?.length || 0} findings
+            <RelativeTime date={analysis.createdAt} /> • {analysis.findings?.length || 0} findings
           </p>
         </div>
       </div>

@@ -19,7 +19,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScoreGauge, ScoreBadge } from '@/components/score-gauge';
 import { ScoreHistoryChart, FindingsBySeverityChart } from '@/components/charts';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatRelativeTime, getScoreColor } from '@/lib/utils';
+import { getScoreColor } from '@/lib/utils';
+import { RelativeTime } from '@/components/relative-time';
 import Link from 'next/link';
 
 export default function DashboardPage() {
@@ -280,7 +281,7 @@ function RepositoryRow({ repository, installationId }: RepositoryRowProps) {
           <p className="text-sm text-muted-foreground">
             {repository.analysisCount} analyses
             {repository.lastAnalyzedAt && (
-              <> • Last analyzed {formatRelativeTime(repository.lastAnalyzedAt)}</>
+              <> • Last analyzed <RelativeTime date={repository.lastAnalyzedAt} /></>
             )}
           </p>
         </div>

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScoreBadge } from '@/components/score-gauge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatRelativeTime } from '@/lib/utils';
+import { RelativeTime } from '@/components/relative-time';
 import Link from 'next/link';
 import { useState, useMemo } from 'react';
 
@@ -152,7 +152,7 @@ function RepositoryCard({ repository, installationId }: RepositoryCardProps) {
                 <p className="text-sm text-muted-foreground">
                   {repository.private ? 'Private' : 'Public'} • {repository.defaultBranch}
                   {repository.lastAnalyzedAt && (
-                    <> • Analyzed {formatRelativeTime(repository.lastAnalyzedAt)}</>
+                    <> • Analyzed <RelativeTime date={repository.lastAnalyzedAt} /></>
                   )}
                 </p>
               </div>

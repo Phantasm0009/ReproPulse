@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FixTrendChart } from '@/components/charts';
-import { formatRelativeTime } from '@/lib/utils';
+import { RelativeTime } from '@/components/relative-time';
+import { useState, useEffect, useMemo } from 'react';
 
 export default function FixesPage() {
   const searchParams = useSearchParams();
@@ -44,6 +45,12 @@ export default function FixesPage() {
     enabled: !!repositories && repositories.length > 0,
   });
 
+  // Track mounted state for hydration-safe rendering
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Calculate stats
   const stats = {
     total: allFixRuns?.length || 0,
@@ -52,24 +59,27 @@ export default function FixesPage() {
     failed: allFixRuns?.filter((f) => f.status === 'failed').length || 0,
   };
 
-  // Prepare chart data (last 7 days)
-  const chartData = Array.from({ length: 7 }).map((_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - i));
-    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Prepare chart data (last 7 days) - only calculate on client
+  const chartData = useMemo(() => {
+    if (!mounted) return [];
+    return Array.from({ length: 7 }).map((_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-    const dayFixes = allFixRuns?.filter((f) => {
-      const fixDate = new Date(f.createdAt);
-      return fixDate.toDateString() === date.toDateString();
-    }) || [];
+      const dayFixes = allFixRuns?.filter((f) => {
+        const fixDate = new Date(f.createdAt);
+        return fixDate.toDateString() === date.toDateString();
+      }) || [];
 
-    return {
-      date: dateStr,
-      applied: dayFixes.filter((f) => f.status === 'completed').length,
-      pending: dayFixes.filter((f) => f.status === 'pending' || f.status === 'in_progress').length,
-      failed: dayFixes.filter((f) => f.status === 'failed').length,
-    };
-  });
+      return {
+        date: dateStr,
+        applied: dayFixes.filter((f) => f.status === 'completed').length,
+        pending: dayFixes.filter((f) => f.status === 'pending' || f.status === 'in_progress').length,
+        failed: dayFixes.filter((f) => f.status === 'failed').length,
+      };
+    });
+  }, [mounted, allFixRuns]);
 
   return (
     <DashboardLayout user={user?.user} installationId={installationId || undefined}>
@@ -225,7 +235,7 @@ function FixRow({ fix }: FixRowProps) {
             <GitBranch className="w-3 h-3" />
             {fix.repository.fullName}
             <span>•</span>
-            {formatRelativeTime(fix.createdAt)}
+            <RelativeTime date={fix.createdAt} />
           </div>
           {fix.error && (
             <p className="text-sm text-red-500 mt-1">{fix.error}</p>
