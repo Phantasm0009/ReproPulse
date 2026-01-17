@@ -2,8 +2,10 @@ name: Keep Render Alive
 
 on:
   schedule:
-    # Runs every 14 minutes (just under Render's 15-min sleep threshold)
-    - cron: '*/14 * * * *'
+    # Runs every 10 minutes during peak hours (8am-11pm UTC), less frequently at night
+    # This balances keeping alive vs conserving GitHub Actions minutes
+    - cron: '*/10 8-23 * * *'  # Every 10 min from 8am-11pm UTC
+    - cron: '0,30 0-7 * * *'   # Every 30 min from midnight-8am UTC
   workflow_dispatch: # Allow manual trigger
 
 jobs:
